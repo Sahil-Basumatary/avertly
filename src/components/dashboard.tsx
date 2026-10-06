@@ -378,8 +378,8 @@ export function Dashboard() {
   };
 
   return (
-    <main className="flex min-h-dvh flex-col bg-[#090a0b] text-zinc-100">
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-6">
+    <main className="flex min-h-dvh flex-col bg-[#090a0b] text-zinc-100 lg:relative lg:h-dvh lg:min-h-0 lg:overflow-hidden">
+      <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-6 lg:absolute lg:top-4 lg:right-4 lg:left-4 lg:z-30 lg:min-h-12 lg:border lg:bg-[#0d0e10] lg:px-5 lg:py-0">
         <div className="flex items-baseline gap-3">
           <h1 className="text-sm font-semibold tracking-[0.15em] uppercase">
             Avertly
@@ -390,8 +390,8 @@ export function Dashboard() {
         </div>
         <DataStatus feed={feed} loading={loading} />
       </header>
-      <section className="grid flex-1 lg:min-h-0 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
-        <aside className="order-2 border-white/10 bg-[#0d0e10] lg:order-1 lg:min-h-0 lg:border-r">
+      <section className="grid flex-1 lg:absolute lg:inset-0 lg:block lg:min-h-0">
+        <aside className="order-2 border-white/10 bg-[#0d0e10] lg:absolute lg:top-20 lg:bottom-4 lg:left-4 lg:z-20 lg:w-[300px] lg:overflow-y-auto lg:border xl:w-[340px]">
           <div className="border-b border-white/8 p-4 sm:p-5">
             <label className="mb-2 block text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
               Active route
@@ -420,7 +420,7 @@ export function Dashboard() {
             />
           )}
         </aside>
-        <section className="order-1 h-[45dvh] min-h-[330px] border-b border-white/10 lg:order-2 lg:h-auto lg:min-h-0 lg:border-b-0">
+        <section className="order-1 h-[45dvh] min-h-[330px] border-b border-white/10 lg:absolute lg:inset-0 lg:z-0 lg:h-full lg:min-h-0 lg:border-b-0">
           {!feed || !selected ? (
             <div className="flex size-full items-center justify-center bg-[#070809]">
               <div className="w-44 space-y-3">
@@ -439,7 +439,7 @@ export function Dashboard() {
             />
           )}
         </section>
-        <aside className="order-3 hidden min-h-0 border-l border-white/10 bg-[#0d0e10] p-6 lg:block">
+        <aside className="order-3 hidden min-h-0 border-white/10 bg-[#0d0e10] p-6 lg:absolute lg:top-20 lg:right-4 lg:bottom-4 lg:z-20 lg:block lg:w-[320px] lg:overflow-y-auto lg:border xl:w-[360px]">
           {!loading && selected ? (
             <EventDetail
               event={selected.event}

@@ -32,32 +32,54 @@ function getStyle(): StyleSpecification {
 
   return {
     version: 8,
-    sources: apiKey
-      ? {
-          carto: {
+    sources: {
+      esriImagery: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, Maxar, Earthstar Geographics",
+      },
+      ...(apiKey
+        ? {
+          cartoLabels: {
             type: "raster",
-            tiles: [
-              `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(apiKey)}`,
-            ],
+            tiles: ["a", "b", "c", "d"].map(
+              (subdomain) =>
+                `https://${subdomain}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png?key=${encodeURIComponent(apiKey)}`,
+            ),
             tileSize: 256,
             attribution:
               '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
           },
         }
-      : {},
+        : {}),
+    },
     layers: [
       {
         id: "background",
         type: "background",
-        paint: { "background-color": "#070809" },
+        paint: { "background-color": "#000000" },
+      },
+      {
+        id: "esri-imagery",
+        type: "raster",
+        source: "esriImagery",
+        paint: {
+          "raster-opacity": 1,
+          "raster-saturation": -0.85,
+          "raster-brightness-min": 0.02,
+          "raster-brightness-max": 0.72,
+        },
       },
       ...(apiKey
         ? [
             {
-              id: "carto-dark",
+              id: "carto-labels",
               type: "raster" as const,
-              source: "carto",
-              paint: { "raster-opacity": 0.72 },
+              source: "cartoLabels",
+              paint: { "raster-opacity": 1 },
             },
           ]
         : []),
@@ -73,6 +95,17 @@ function getBounds(route: Route): LngLatBoundsLike {
     [Math.min(...longitudes), Math.min(...latitudes)],
     [Math.max(...longitudes), Math.max(...latitudes)],
   ];
+}
+
+function getCameraPadding(map: MapLibreMap) {
+  const width = map.getContainer().clientWidth;
+  if (width >= 1280) {
+    return { top: 96, right: 400, bottom: 32, left: 380 };
+  }
+  if (width >= 1024) {
+    return { top: 96, right: 360, bottom: 32, left: 340 };
+  }
+  return 70;
 }
 
 function routeData(route: Route, coordinateCount = route.coordinates.length) {
@@ -171,12 +204,13 @@ export default function RiskMap({
     map.on("load", () => {
       map.setProjection({ type: "globe" });
       map.setSky({
-        "sky-color": "#040506",
-        "horizon-color": "#16181b",
-        "fog-color": "#08090a",
-        "sky-horizon-blend": 0.35,
-        "horizon-fog-blend": 0.45,
-        "atmosphere-blend": 0.75,
+        "sky-color": "#000000",
+        "horizon-color": "#d4d4d8",
+        "fog-color": "#8b8b91",
+        "fog-ground-blend": 0.75,
+        "sky-horizon-blend": 0.18,
+        "horizon-fog-blend": 0.35,
+        "atmosphere-blend": 0.95,
       });
 
       map.addSource(routeSourceId, {
@@ -193,7 +227,7 @@ export default function RiskMap({
         },
         paint: {
           "line-color": "#f4f4f5",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.25, 6, 2],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 2, 6, 3.25],
           "line-opacity": 0.92,
         },
       });
@@ -231,14 +265,14 @@ export default function RiskMap({
             "case",
             ["get", "selected"],
             "#ffffff",
-            "#202225",
+            "#050505",
           ],
-          "circle-stroke-width": ["case", ["get", "selected"], 2.5, 1],
+          "circle-stroke-width": ["case", ["get", "selected"], 2.5, 1.25],
         },
       });
 
       const camera = map.cameraForBounds(getBounds(initial.route), {
-        padding: 70,
+        padding: getCameraPadding(map),
         maxZoom: 3.15,
       });
       if (camera) {
@@ -292,7 +326,7 @@ export default function RiskMap({
       eventData(events, assessments, selectedEventId),
     );
     const camera = map.cameraForBounds(getBounds(route), {
-      padding: 70,
+      padding: getCameraPadding(map),
       maxZoom: 3.15,
     });
     if (camera) {
@@ -312,11 +346,11 @@ export default function RiskMap({
   }, [assessments, events, selectedEventId]);
 
   return (
-    <div className="relative size-full bg-[#070809]">
+    <div className="relative size-full bg-black">
       <div ref={containerRef} className="size-full" aria-label="Route risk map" />
       {!process.env.NEXT_PUBLIC_CARTO_API_KEY && (
         <div className="pointer-events-none absolute bottom-4 left-4 border border-white/10 bg-[#0c0d0f] px-2.5 py-1.5 text-[10px] tracking-wide text-zinc-500 uppercase">
-          Basemap unavailable · route geometry only
+          CARTO labels unavailable · imagery active
         </div>
       )}
     </div>

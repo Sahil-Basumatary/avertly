@@ -51,6 +51,36 @@ a {
   opacity: 0.55;
 }
 
+@media (min-width: 1024px) {
+  main aside {
+    scrollbar-color: #3f3f46 #0d0e10;
+    scrollbar-width: thin;
+  }
+
+  main aside::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  main aside::-webkit-scrollbar-track {
+    background: #0d0e10;
+  }
+
+  main aside::-webkit-scrollbar-thumb {
+    background: #3f3f46;
+  }
+
+  .maplibregl-ctrl-bottom-right {
+    right: 336px;
+    bottom: 8px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .maplibregl-ctrl-bottom-right {
+    right: 376px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
