@@ -74,18 +74,24 @@ const replayEvents = [
 class ReplayEventSource implements EventSource {
   readonly mode = "replay" as const;
 
-  async getEvents(): Promise<Event[]> {
-    return eventSchema.array().parse(replayEvents);
+  async getEvents(): Promise<{
+    events: Event[];
+    updatedAt: string;
+  }> {
+    return {
+      events: eventSchema.array().parse(replayEvents),
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
 
-export const replayEventSource = new ReplayEventSource();
+export const replayEventSource: EventSource = new ReplayEventSource();
 export const events = eventSchema.array().parse(replayEvents);
 
 export type RouteAssessment = {
   eventId: Event["id"];
-  score: number;
-  band: "guarded" | "elevated" | "high";
+  score: number | null;
+  band: "guarded" | "elevated" | "high" | null;
 };
 
 export const replayAssessments: Record<"suez" | "cape", RouteAssessment[]> = {

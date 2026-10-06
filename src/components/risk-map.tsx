@@ -37,7 +37,7 @@ function getStyle(): StyleSpecification {
           carto: {
             type: "raster",
             tiles: [
-              `https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?api_key=${encodeURIComponent(apiKey)}`,
+              `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(apiKey)}`,
             ],
             tileSize: 256,
             attribution:

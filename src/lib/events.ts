@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 export const eventSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  summary: z.string(),
-  sourceName: z.string(),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  sourceName: z.string().min(1),
   sourceUrl: z.url(),
   publishedAt: z.iso.datetime(),
   timePrecision: z.enum(["minute", "date"]),
@@ -15,12 +15,17 @@ export const eventSchema = z.object({
   locationName: z.string(),
   locationNote: z.string(),
   category: z.enum(["security", "weather", "operations"]),
-  mode: z.literal("replay"),
+  mode: z.enum(["live", "replay"]),
 });
 
 export type Event = z.infer<typeof eventSchema>;
 
+export type EventSourceSnapshot = {
+  events: Event[];
+  updatedAt: string;
+};
+
 export interface EventSource {
   readonly mode: Event["mode"];
-  getEvents(): Promise<Event[]>;
+  getEvents(routeId: "suez" | "cape"): Promise<EventSourceSnapshot>;
 }

@@ -1,15 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 
 import {
-  events,
+  events as replayEvents,
   replayAssessments,
   type RouteAssessment,
 } from "@/data/replay-events";
 import { routes, type Route } from "@/data/routes";
+import { eventFeedSchema, type EventFeed } from "@/lib/event-feed";
 import type { Event } from "@/lib/events";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,48 @@ const RiskMap = dynamic(() => import("@/components/risk-map"), {
     </div>
   ),
 });
+
+function DataStatus({
+  feed,
+  loading,
+}: {
+  feed: EventFeed | null;
+  loading: boolean;
+}) {
+  if (loading || !feed) {
+    return (
+      <div className="flex items-center gap-2 text-[10px] tracking-[0.14em] text-zinc-500 uppercase">
+        <span className="size-1.5 rounded-full bg-zinc-700" />
+        Checking data
+      </div>
+    );
+  }
+
+  if (feed.mode === "live") {
+    const updatedAt = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(feed.updatedAt));
+
+    return (
+      <div className="flex items-center gap-2 text-[10px] tracking-[0.14em] text-zinc-300 uppercase">
+        <span className="size-1.5 rounded-full bg-zinc-300" />
+        Live · updated {updatedAt}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[15rem] text-right">
+      <div className="text-[10px] tracking-[0.14em] text-zinc-300 uppercase">
+        Replay
+      </div>
+      <div className="mt-0.5 text-[10px] leading-4 text-zinc-600">
+        {feed.provider.reason}
+      </div>
+    </div>
+  );
+}
 
 function formatPublishedAt(event: Event) {
   const formattedDate = new Intl.DateTimeFormat("en-GB", {
@@ -134,13 +177,34 @@ function EventList({
                     : "font-mono text-xl tabular-nums text-zinc-400"
                 }
               >
-                {assessment.score}
+                {assessment.score ?? "—"}
               </span>
             </button>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+function EventListSkeleton() {
+  return (
+    <div className="space-y-px">
+      {[0, 1, 2, 3].map((item) => (
+        <div
+          key={item}
+          className="grid grid-cols-[2rem_1fr_auto] gap-3 border-b border-white/8 px-4 py-4"
+        >
+          <Skeleton className="h-3 w-4" />
+          <div className="space-y-2.5">
+            <Skeleton className="h-2 w-28" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <Skeleton className="h-6 w-7" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -156,21 +220,26 @@ function EventDetail({
       <div className="border-b border-white/8 pb-6">
         <div className="mb-5 flex items-center justify-between gap-4">
           <span className="text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
-            Curated replay exposure
+            {assessment.score === null
+              ? "Exposure scoring pending"
+              : "Curated replay exposure"}
           </span>
           <span className="border border-white/10 px-2 py-1 text-[10px] tracking-[0.14em] text-zinc-400 uppercase">
-            {assessment.band}
+            {assessment.band ?? "unscored"}
           </span>
         </div>
         <div className="font-mono text-6xl leading-none tracking-[-0.06em] tabular-nums text-white">
-          {assessment.score}
-          <span className="ml-2 text-base tracking-normal text-zinc-600">
-            /100
-          </span>
+          {assessment.score ?? "—"}
+          {assessment.score !== null && (
+            <span className="ml-2 text-base tracking-normal text-zinc-600">
+              /100
+            </span>
+          )}
         </div>
         <p className="mt-3 text-xs leading-5 text-zinc-500">
-          Fixture value for this replay. It is not a prediction or a rerouting
-          recommendation. Formula-based scoring is the next milestone.
+          {assessment.score === null
+            ? "This live report has not been scored yet. Formula-based exposure scoring is the next milestone."
+            : "Fixture value for this replay. It is not a prediction or a rerouting recommendation. Formula-based scoring is the next milestone."}
         </p>
       </div>
       <div className="space-y-6 py-6">
@@ -193,7 +262,9 @@ function EventDetail({
           <dt className="text-zinc-600">Location</dt>
           <dd className="text-zinc-300">{event.locationName}</dd>
           <dt className="text-zinc-600">Data mode</dt>
-          <dd className="text-zinc-300">Curated replay</dd>
+          <dd className="text-zinc-300">
+            {event.mode === "live" ? "Live · GDELT Cloud" : "Curated replay"}
+          </dd>
         </dl>
         <div>
           <div className="mb-2 text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
@@ -218,22 +289,78 @@ function EventDetail({
 
 export function Dashboard() {
   const [routeId, setRouteId] = useState<Route["id"]>("suez");
-  const [selectedEventId, setSelectedEventId] = useState(
-    replayAssessments.suez[0].eventId,
-  );
+  const [feed, setFeed] = useState<EventFeed | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const route = routes.find((candidate) => candidate.id === routeId) ?? routes[0];
-  const assessments = replayAssessments[route.id];
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadEvents() {
+      try {
+        const response = await fetch(`/api/events?routeId=${routeId}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Events API returned HTTP ${response.status}`);
+        }
+        const nextFeed = eventFeedSchema.parse(await response.json());
+        setFeed(nextFeed);
+        setSelectedEventId(nextFeed.events[0]?.id ?? "");
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const fallbackFeed = eventFeedSchema.parse({
+          mode: "replay",
+          updatedAt: new Date().toISOString(),
+          provider: {
+            name: "GDELT Cloud",
+            status: "fallback",
+            reason:
+              error instanceof Error
+                ? `Events API unavailable: ${error.message}`
+                : "Events API unavailable.",
+          },
+          events: replayEvents,
+        });
+        setFeed(fallbackFeed);
+        setSelectedEventId(fallbackFeed.events[0]?.id ?? "");
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadEvents();
+    return () => controller.abort();
+  }, [routeId]);
+
+  const activeEvents = useMemo(() => feed?.events ?? [], [feed]);
+  const assessments = useMemo<RouteAssessment[]>(() => {
+    if (feed?.mode === "replay") {
+      return replayAssessments[route.id];
+    }
+    return activeEvents.map((event) => ({
+      eventId: event.id,
+      score: null,
+      band: null,
+    }));
+  }, [activeEvents, feed?.mode, route.id]);
   const rankedEvents = useMemo(
     () =>
       assessments.flatMap((assessment) => {
-        const event = events.find(
+        const event = activeEvents.find(
           (candidate) => candidate.id === assessment.eventId,
         );
         return event ? [{ event, assessment }] : [];
       }),
-    [assessments],
+    [activeEvents, assessments],
   );
   const selected =
     rankedEvents.find(({ event }) => event.id === selectedEventId) ??
@@ -241,7 +368,7 @@ export function Dashboard() {
 
   const handleRouteChange = (nextRouteId: Route["id"]) => {
     setRouteId(nextRouteId);
-    setSelectedEventId(replayAssessments[nextRouteId][0].eventId);
+    setLoading(true);
     setMobileDetailOpen(false);
   };
 
@@ -252,7 +379,7 @@ export function Dashboard() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-[#090a0b] text-zinc-100">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-4 sm:px-6">
+      <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-6">
         <div className="flex items-baseline gap-3">
           <h1 className="text-sm font-semibold tracking-[0.15em] uppercase">
             Avertly
@@ -261,10 +388,7 @@ export function Dashboard() {
             Route exposure workspace
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] tracking-[0.14em] text-zinc-400 uppercase">
-          <span className="size-1.5 rounded-full bg-zinc-500" />
-          Replay data
-        </div>
+        <DataStatus feed={feed} loading={loading} />
       </header>
       <section className="grid flex-1 lg:min-h-0 lg:grid-cols-[340px_minmax(0,1fr)_360px]">
         <aside className="order-2 border-white/10 bg-[#0d0e10] lg:order-1 lg:min-h-0 lg:border-r">
@@ -280,48 +404,72 @@ export function Dashboard() {
           </div>
           <div className="flex items-center justify-between px-4 pt-5 pb-2">
             <span className="text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
-              Ranked public reports
+              Public reports
             </span>
             <span className="font-mono text-xs tabular-nums text-zinc-600">
-              {rankedEvents.length}
+              {loading ? "—" : rankedEvents.length}
             </span>
           </div>
-          <EventList
-            rankedEvents={rankedEvents}
-            selectedEventId={selected.event.id}
-            onSelect={handleEventSelect}
-          />
+          {loading || !selected ? (
+            <EventListSkeleton />
+          ) : (
+            <EventList
+              rankedEvents={rankedEvents}
+              selectedEventId={selected.event.id}
+              onSelect={handleEventSelect}
+            />
+          )}
         </aside>
         <section className="order-1 h-[45dvh] min-h-[330px] border-b border-white/10 lg:order-2 lg:h-auto lg:min-h-0 lg:border-b-0">
-          <RiskMap
-            route={route}
-            events={events}
-            assessments={assessments}
-            selectedEventId={selected.event.id}
-            onSelectEvent={handleEventSelect}
-          />
+          {!feed || !selected ? (
+            <div className="flex size-full items-center justify-center bg-[#070809]">
+              <div className="w-44 space-y-3">
+                <Skeleton className="h-2 w-full" />
+                <Skeleton className="mx-auto size-24 rounded-full" />
+                <Skeleton className="h-2 w-3/4" />
+              </div>
+            </div>
+          ) : (
+            <RiskMap
+              route={route}
+              events={activeEvents}
+              assessments={assessments}
+              selectedEventId={selected.event.id}
+              onSelectEvent={handleEventSelect}
+            />
+          )}
         </section>
         <aside className="order-3 hidden min-h-0 border-l border-white/10 bg-[#0d0e10] p-6 lg:block">
-          <EventDetail
-            event={selected.event}
-            assessment={selected.assessment}
-          />
-        </aside>
-      </section>
-      <div className="lg:hidden">
-        <Sheet open={mobileDetailOpen} onOpenChange={setMobileDetailOpen}>
-          <SheetContent>
-            <SheetTitle className="sr-only">{selected.event.title}</SheetTitle>
-            <SheetDescription className="sr-only">
-              Public report details and replay exposure.
-            </SheetDescription>
+          {!loading && selected ? (
             <EventDetail
               event={selected.event}
               assessment={selected.assessment}
             />
-          </SheetContent>
-        </Sheet>
-      </div>
+          ) : (
+            <div className="space-y-5">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-16 w-24" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          )}
+        </aside>
+      </section>
+      {selected && (
+        <div className="lg:hidden">
+          <Sheet open={mobileDetailOpen} onOpenChange={setMobileDetailOpen}>
+            <SheetContent>
+              <SheetTitle className="sr-only">{selected.event.title}</SheetTitle>
+              <SheetDescription className="sr-only">
+                Public report details and exposure status.
+              </SheetDescription>
+              <EventDetail
+                event={selected.event}
+                assessment={selected.assessment}
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
+      )}
     </main>
   );
 }
