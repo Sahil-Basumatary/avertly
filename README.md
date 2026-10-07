@@ -28,7 +28,7 @@ The score is additive and capped at 100:
 
 Reports more than 500 km from the route are removed. Scores of 80 or more are high, 65–79 are elevated and lower scores are guarded. Replay recency is measured from the replay snapshot.
 
-These weights, bands and distance thresholds are predictions but product assumptions. They are named constants in `src/lib/exposure.ts` so they can be reviewed and changed.
+These weights, bands and distance thresholds are predictions and not product assumptions. They are named constants in `src/lib/exposure.ts` so they can be reviewed and changed.
 
 ## Run locally
 
@@ -43,8 +43,6 @@ GDELT_API_KEY=
 GEMINI_API_KEY=
 NEXT_PUBLIC_CARTO_API_KEY=
 ```
-
-`GDELT_API_KEY` and `GEMINI_API_KEY` stay on the server. Restrict the public CARTO key by referrer.
 
 ```bash
 npm run dev
