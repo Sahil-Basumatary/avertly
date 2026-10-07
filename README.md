@@ -1,8 +1,8 @@
 # Avertly
 
-Avertly is a route-exposure workspace for risk and operations teams at freight forwarders and shippers. It ranks recent public reports near a shipping route, explains each score and drafts a cited brief. It does not recommend rerouting; the analyst makes the decision.
+Avertly is a route-exposure workspace for risk and operations teams at freight forwarders and shippers. It ranks recent public reports near a shipping route, explains each score and drafts a cited brief. It does not recommend rerouting. Analyst makes the final decision.
 
-[Live app](https://avertly.vercel.app) · [Repository](https://github.com/Sahil-Basumatary/avertly)
+[Live app](https://avertly.vercel.app) 
 
 ## Use it
 
@@ -15,7 +15,7 @@ Avertly is a route-exposure workspace for risk and operations teams at freight f
 
 The server requests route-relevant GDELT Cloud events, validates and normalises them with Zod, then scores their distance, category, recency and location precision. Turf measures each report against the route line. The top reports are shown through one GeoJSON source on a MapLibre globe.
 
-The brief endpoint rebuilds the top eight scores on the server and asks Gemini 3.5 Flash-Lite for structured JSON. Unknown citations and unsupported evidence are removed before the response reaches the UI. If GDELT fails, the app uses a dated replay set. If Gemini fails or returns an unsafe or invalid brief, the app produces a rule-based summary from the top three reports.
+The brief endpoint rebuilds the top eight scores on the server and asks Gemini 3.5 Flash-Lite for structured JSON. Unknown citations and unsupported evidence are removed before the response reach the UI. If GDELT fails, the app uses a dated replay set. If Gemini fails or returns an unsafe or invalid brief, the app produces a rule-based summary from the top three reports.
 
 ## Exposure score
 
@@ -26,9 +26,9 @@ The score is additive and capped at 100:
 - category: up to 20 points
 - location precision: up to 10 points
 
-Reports more than 500 km from the route are removed. Scores of 80 or more are high, 65–79 are elevated and lower scores are guarded. Replay recency is measured from the replay snapshot, not today.
+Reports more than 500 km from the route are removed. Scores of 80 or more are high, 65–79 are elevated and lower scores are guarded. Replay recency is measured from the replay snapshot.
 
-These weights, bands and distance thresholds are product assumptions, not predictions. They are named constants in `src/lib/exposure.ts` so they can be reviewed and changed.
+These weights, bands and distance thresholds are predictions but product assumptions. They are named constants in `src/lib/exposure.ts` so they can be reviewed and changed.
 
 ## Run locally
 
@@ -60,8 +60,8 @@ npm run lint
 npm run build
 ```
 
-## Deliberate limits
+## Limitations
 
 This version has no accounts, organisations, saved routes, scheduled alerts or payments. It supports two fixed routes and public-report evidence only. The raster map labels are not guaranteed to be English.
 
-Next I would add organisation-scoped accounts and saved routes, durable ingestion and caching, scheduled alerts, English vector labels, broader source evaluation and production rate limiting and monitoring.
+What I would do next is to add organisation-scoped accounts and saved routes, durable ingestion and caching, scheduled alerts, English vector labels, broader source evaluation and production rate limiting and monitoring.
