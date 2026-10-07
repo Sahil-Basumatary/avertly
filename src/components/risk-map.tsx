@@ -86,9 +86,13 @@ function getStyle(): StyleSpecification {
   };
 }
 
-function getBounds(route: Route): LngLatBoundsLike {
-  const longitudes = route.coordinates.map(([longitude]) => longitude);
-  const latitudes = route.coordinates.map(([, latitude]) => latitude);
+function getBounds(route: Route, events: Event[]): LngLatBoundsLike {
+  const coordinates = [
+    ...route.coordinates,
+    ...events.map((event) => event.coordinates),
+  ];
+  const longitudes = coordinates.map(([longitude]) => longitude);
+  const latitudes = coordinates.map(([, latitude]) => latitude);
 
   return [
     [Math.min(...longitudes), Math.min(...latitudes)],
@@ -98,13 +102,19 @@ function getBounds(route: Route): LngLatBoundsLike {
 
 function getCameraPadding(map: MapLibreMap) {
   const width = map.getContainer().clientWidth;
+  const height = map.getContainer().clientHeight;
   if (width >= 1280) {
-    return { top: 96, right: 400, bottom: 32, left: 380 };
+    return { top: 80, right: 400, bottom: 48, left: 380 };
   }
   if (width >= 1024) {
-    return { top: 96, right: 360, bottom: 32, left: 340 };
+    return { top: 80, right: 360, bottom: 48, left: 340 };
   }
-  return 70;
+  return {
+    top: 24,
+    right: 24,
+    bottom: Math.min(144, Math.max(96, height * 0.32)),
+    left: 24,
+  };
 }
 
 function routeData(route: Route, coordinateCount = route.coordinates.length) {
@@ -270,12 +280,21 @@ export default function RiskMap({
         },
       });
 
-      const camera = map.cameraForBounds(getBounds(initial.route), {
-        padding: getCameraPadding(map),
-        maxZoom: 3.15,
-      });
+      const padding = getCameraPadding(map);
+      const camera = map.cameraForBounds(
+        getBounds(initial.route, initial.events),
+        {
+          padding,
+          absolutePadding: true,
+          maxZoom: 2.35,
+        },
+      );
       if (camera) {
-        map.easeTo({ ...camera, duration: 1400 });
+        map.easeTo({
+          ...camera,
+          padding,
+          duration: 1400,
+        });
       }
 
       let visibleCoordinates = 1;
@@ -324,12 +343,19 @@ export default function RiskMap({
     (map.getSource(eventSourceId) as GeoJSONSource).setData(
       eventData(events, assessments, selectedEventId),
     );
-    const camera = map.cameraForBounds(getBounds(route), {
-      padding: getCameraPadding(map),
-      maxZoom: 3.15,
+    const padding = getCameraPadding(map);
+    const camera = map.cameraForBounds(getBounds(route, events), {
+      padding,
+      absolutePadding: true,
+      maxZoom: 2.35,
     });
     if (camera) {
-      map.flyTo({ ...camera, duration: 1100, essential: true });
+      map.flyTo({
+        ...camera,
+        padding,
+        duration: 1100,
+        essential: true,
+      });
     }
   }, [assessments, events, route, selectedEventId]);
 

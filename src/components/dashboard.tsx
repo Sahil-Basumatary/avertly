@@ -113,6 +113,10 @@ function formatPublishedAt(event: Event) {
     : formattedDate;
 }
 
+function getSourceDomain(event: Event) {
+  return new URL(event.sourceUrl).hostname.replace(/^www\./, "");
+}
+
 function RoutePicker({
   route,
   onRouteChange,
@@ -164,19 +168,19 @@ function EventList({
               type="button"
               onClick={() => onSelect(event.id)}
               aria-pressed={selected}
-              className="group grid w-full grid-cols-[2rem_1fr_auto] gap-3 px-4 py-4 text-left transition-colors duration-150 hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:outline-none aria-pressed:bg-white/[0.055]"
+              className="group grid w-full grid-cols-[2rem_1fr_auto] gap-4 px-5 py-5 text-left transition-colors duration-150 hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:outline-none aria-pressed:bg-white/[0.055]"
             >
               <span className="pt-0.5 font-mono text-xs tabular-nums text-zinc-600">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <span className="min-w-0">
-                <span className="mb-1.5 block text-[10px] tracking-[0.14em] text-zinc-500 uppercase">
-                  Public report · {event.sourceName}
+                <span className="mb-2 block font-mono text-[10px] text-zinc-600">
+                  {getSourceDomain(event)}
                 </span>
-                <span className="block text-sm leading-5 font-medium text-zinc-200 group-hover:text-white">
+                <span className="block text-[13px] leading-5 font-medium text-zinc-200 group-hover:text-white">
                   {event.title}
                 </span>
-                <span className="mt-2 block text-xs text-zinc-500">
+                <span className="mt-2.5 block text-[11px] text-zinc-500">
                   {event.locationName}
                 </span>
               </span>
@@ -203,7 +207,7 @@ function EventListSkeleton() {
       {[0, 1, 2, 3].map((item) => (
         <div
           key={item}
-          className="grid grid-cols-[2rem_1fr_auto] gap-3 border-b border-white/8 px-4 py-4"
+          className="grid grid-cols-[2rem_1fr_auto] gap-4 border-b border-white/8 px-5 py-5"
         >
           <Skeleton className="h-3 w-4" />
           <div className="space-y-2.5">
@@ -534,7 +538,7 @@ export function Dashboard() {
       </header>
       <section className="grid flex-1 lg:absolute lg:inset-0 lg:block lg:min-h-0">
         <aside className="order-2 border-white/10 bg-[#0d0e10] lg:absolute lg:top-20 lg:bottom-4 lg:left-4 lg:z-20 lg:w-[300px] lg:overflow-y-auto lg:border xl:w-[340px]">
-          <div className="border-b border-white/8 p-4 sm:p-5">
+          <div className="border-b border-white/8 p-5 sm:p-6">
             <label className="mb-2 block text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
               Active route
             </label>
@@ -558,7 +562,7 @@ export function Dashboard() {
               {briefLoading ? "Generating brief…" : "Generate brief"}
             </Button>
           </div>
-          <div className="flex items-center justify-between px-4 pt-5 pb-2">
+          <div className="flex items-center justify-between px-5 pt-6 pb-3">
             <span className="text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
               Public reports
             </span>
@@ -576,7 +580,7 @@ export function Dashboard() {
             />
           )}
         </aside>
-        <section className="order-1 h-[45dvh] min-h-[330px] border-b border-white/10 lg:absolute lg:inset-0 lg:z-0 lg:h-full lg:min-h-0 lg:border-b-0">
+        <section className="order-1 h-[45dvh] min-h-[330px] border-b border-white/10 lg:absolute lg:inset-0 lg:z-0 lg:h-full lg:min-h-0 lg:overflow-hidden lg:border-b-0 lg:[clip-path:inset(4rem_0_0_0)]">
           {!feed || !selected ? (
             <div className="flex size-full items-center justify-center bg-[#070809]">
               <div className="w-44 space-y-3">
@@ -595,7 +599,7 @@ export function Dashboard() {
             />
           )}
         </section>
-        <aside className="order-3 hidden min-h-0 border-white/10 bg-[#0d0e10] p-6 lg:absolute lg:top-20 lg:right-4 lg:bottom-4 lg:z-20 lg:block lg:w-[320px] lg:overflow-y-auto lg:border xl:w-[360px]">
+        <aside className="order-3 hidden min-h-0 border-white/10 bg-[#0d0e10] p-7 lg:absolute lg:top-20 lg:right-4 lg:bottom-4 lg:z-20 lg:block lg:w-[320px] lg:overflow-y-auto lg:border xl:w-[360px]">
           {briefOpen && briefLoading ? (
             <BriefSkeleton />
           ) : briefOpen && brief ? (
