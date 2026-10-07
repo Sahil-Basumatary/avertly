@@ -361,7 +361,12 @@ export function Dashboard() {
   const [mobilePanel, setMobilePanel] = useState<"event" | "brief" | null>(
     null,
   );
+  const [mapFocusRequest, setMapFocusRequest] = useState<{
+    eventId: string;
+    sequence: number;
+  } | null>(null);
   const briefRequestRef = useRef<AbortController | null>(null);
+  const mapFocusSequenceRef = useRef(0);
 
   const route = routes.find((candidate) => candidate.id === routeId) ?? routes[0];
 
@@ -445,14 +450,26 @@ export function Dashboard() {
     setBriefLoading(false);
     setBriefOpen(false);
     setMobilePanel(null);
+    setMapFocusRequest(null);
   };
 
-  const handleEventSelect = (eventId: string) => {
+  const handleEventSelect = (eventId: string, focusMap = false) => {
     setSelectedEventId(eventId);
     setBriefOpen(false);
+    if (focusMap) {
+      mapFocusSequenceRef.current += 1;
+      setMapFocusRequest({
+        eventId,
+        sequence: mapFocusSequenceRef.current,
+      });
+    }
     if (window.matchMedia("(max-width: 1023px)").matches) {
       setMobilePanel("event");
     }
+  };
+
+  const handleListEventSelect = (eventId: string) => {
+    handleEventSelect(eventId, true);
   };
 
   const handleGenerateBrief = async () => {
@@ -576,7 +593,7 @@ export function Dashboard() {
             <EventList
               rankedEvents={rankedEvents}
               selectedEventId={selected.event.id}
-              onSelect={handleEventSelect}
+              onSelect={handleListEventSelect}
             />
           )}
         </aside>
@@ -595,6 +612,7 @@ export function Dashboard() {
               events={rankedMapEvents}
               assessments={assessments}
               selectedEventId={selected.event.id}
+              focusRequest={mapFocusRequest}
               onSelectEvent={handleEventSelect}
             />
           )}
@@ -606,7 +624,7 @@ export function Dashboard() {
             <BriefPanel
               brief={brief}
               events={rankedMapEvents}
-              onSelectCitation={handleEventSelect}
+              onSelectCitation={handleListEventSelect}
               onClose={handleBriefClose}
             />
           ) : !loading && selected ? (
@@ -651,7 +669,7 @@ export function Dashboard() {
                   <BriefPanel
                     brief={brief}
                     events={rankedMapEvents}
-                    onSelectCitation={handleEventSelect}
+                    onSelectCitation={handleListEventSelect}
                     onClose={handleBriefClose}
                   />
                 ) : null

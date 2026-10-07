@@ -18,12 +18,18 @@ type RiskMapProps = {
   events: Event[];
   assessments: ExposureAssessment[];
   selectedEventId: string;
+  focusRequest: {
+    eventId: string;
+    sequence: number;
+  } | null;
   onSelectEvent: (eventId: string) => void;
 };
 
 const routeSourceId = "active-route";
 const eventSourceId = "public-reports";
 const eventLayerId = "public-report-points";
+const selectedEventLayerId = "selected-public-report";
+const selectedEventRingLayerId = "selected-public-report-ring";
 
 maplibregl.setWorkerUrl("/maplibre-gl-worker.mjs");
 
@@ -136,7 +142,6 @@ function routeData(route: Route, coordinateCount = route.coordinates.length) {
 function eventData(
   events: Event[],
   assessments: ExposureAssessment[],
-  selectedEventId: string,
 ) {
   const assessmentByEvent = new Map(
     assessments.map((assessment) => [assessment.eventId, assessment]),
@@ -154,7 +159,6 @@ function eventData(
           eventId: event.id,
           score: assessment?.score ?? 0,
           band: assessment?.band ?? "guarded",
-          selected: event.id === selectedEventId,
         },
         geometry: {
           type: "Point" as const,
@@ -170,12 +174,14 @@ export default function RiskMap({
   events,
   assessments,
   selectedEventId,
+  focusRequest,
   onSelectEvent,
 }: RiskMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const onSelectRef = useRef(onSelectEvent);
   const lastRouteIdRef = useRef(route.id);
+  const lastFocusSequenceRef = useRef(0);
   const initialPropsRef = useRef({
     route,
     events,
@@ -243,23 +249,48 @@ export default function RiskMap({
 
       map.addSource(eventSourceId, {
         type: "geojson",
-        data: eventData(
-          initial.events,
-          initial.assessments,
-          initial.selectedEventId,
-        ),
+        data: eventData(initial.events, initial.assessments),
       });
       map.addLayer({
         id: eventLayerId,
         type: "circle",
         source: eventSourceId,
+        layout: {
+          "circle-sort-key": ["get", "score"],
+        },
         paint: {
           "circle-radius": [
             "interpolate",
             ["linear"],
             ["get", "score"],
             0,
-            4,
+            3,
+            100,
+            7,
+          ],
+          "circle-color": [
+            "case",
+            ["==", ["get", "band"], "high"],
+            "#a84f4f",
+            "#8b8d91",
+          ],
+          "circle-opacity": 0.95,
+          "circle-stroke-color": "#050505",
+          "circle-stroke-width": 1,
+        },
+      });
+      map.addLayer({
+        id: selectedEventLayerId,
+        type: "circle",
+        source: eventSourceId,
+        filter: ["==", ["get", "eventId"], initial.selectedEventId],
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["get", "score"],
+            0,
+            5,
             100,
             9,
           ],
@@ -269,14 +300,30 @@ export default function RiskMap({
             "#a84f4f",
             "#8b8d91",
           ],
-          "circle-opacity": 0.95,
-          "circle-stroke-color": [
-            "case",
-            ["get", "selected"],
-            "#ffffff",
-            "#050505",
+          "circle-opacity": 1,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2.5,
+        },
+      });
+      map.addLayer({
+        id: selectedEventRingLayerId,
+        type: "circle",
+        source: eventSourceId,
+        filter: ["==", ["get", "eventId"], initial.selectedEventId],
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["get", "score"],
+            0,
+            9,
+            100,
+            13,
           ],
-          "circle-stroke-width": ["case", ["get", "selected"], 2.5, 1.25],
+          "circle-color": "rgba(0, 0, 0, 0)",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-opacity": 0.8,
+          "circle-stroke-width": 1,
         },
       });
 
@@ -341,7 +388,7 @@ export default function RiskMap({
     lastRouteIdRef.current = route.id;
     (map.getSource(routeSourceId) as GeoJSONSource).setData(routeData(route));
     (map.getSource(eventSourceId) as GeoJSONSource).setData(
-      eventData(events, assessments, selectedEventId),
+      eventData(events, assessments),
     );
     const padding = getCameraPadding(map);
     const camera = map.cameraForBounds(getBounds(route, events), {
@@ -357,7 +404,7 @@ export default function RiskMap({
         essential: true,
       });
     }
-  }, [assessments, events, route, selectedEventId]);
+  }, [assessments, events, route]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -366,9 +413,80 @@ export default function RiskMap({
     }
 
     (map.getSource(eventSourceId) as GeoJSONSource).setData(
-      eventData(events, assessments, selectedEventId),
+      eventData(events, assessments),
     );
-  }, [assessments, events, selectedEventId]);
+  }, [assessments, events]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const updateSelectionFilters = () => {
+      if (
+        !map.getLayer(selectedEventLayerId) ||
+        !map.getLayer(selectedEventRingLayerId)
+      ) {
+        return;
+      }
+      const filter: maplibregl.FilterSpecification = [
+        "==",
+        ["get", "eventId"],
+        selectedEventId,
+      ];
+      map.setFilter(selectedEventLayerId, filter);
+      map.setFilter(selectedEventRingLayerId, filter);
+    };
+
+    if (map.isStyleLoaded()) {
+      updateSelectionFilters();
+      return;
+    }
+
+    map.once("load", updateSelectionFilters);
+    return () => {
+      map.off("load", updateSelectionFilters);
+    };
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusRequest) {
+      return;
+    }
+
+    const focusEvent = () => {
+      if (focusRequest.sequence <= lastFocusSequenceRef.current) {
+        return;
+      }
+      const event = events.find(
+        (candidate) => candidate.id === focusRequest.eventId,
+      );
+      if (!event) {
+        return;
+      }
+
+      lastFocusSequenceRef.current = focusRequest.sequence;
+      map.easeTo({
+        center: event.coordinates,
+        ...(map.getZoom() < 4 ? { zoom: 4 } : {}),
+        padding: getCameraPadding(map),
+        duration: 650,
+        essential: true,
+      });
+    };
+
+    if (map.isStyleLoaded()) {
+      focusEvent();
+      return;
+    }
+
+    map.once("load", focusEvent);
+    return () => {
+      map.off("load", focusEvent);
+    };
+  }, [events, focusRequest]);
 
   return (
     <div className="relative size-full bg-black">
