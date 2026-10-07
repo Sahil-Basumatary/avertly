@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 
 import {
@@ -9,6 +9,11 @@ import {
   REPLAY_SNAPSHOT_AT,
 } from "@/data/replay-events";
 import { routes, type Route } from "@/data/routes";
+import {
+  briefResponseSchema,
+  buildRuleBasedBrief,
+  type BriefResponse,
+} from "@/lib/brief";
 import { eventFeedSchema, type EventFeed } from "@/lib/event-feed";
 import type { Event } from "@/lib/events";
 import {
@@ -16,6 +21,7 @@ import {
   type ExposureAssessment,
   type RankedEvent,
 } from "@/lib/exposure";
+import { BriefPanel } from "@/components/brief-panel";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -212,6 +218,27 @@ function EventListSkeleton() {
   );
 }
 
+function BriefSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3 border-b border-white/8 pb-5">
+        <Skeleton className="h-2 w-44" />
+        <Skeleton className="h-6 w-28" />
+        <Skeleton className="h-3 w-36" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-11/12" />
+        <Skeleton className="h-3 w-4/5" />
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    </div>
+  );
+}
+
 function EventDetail({
   event,
   assessment,
@@ -324,7 +351,13 @@ export function Dashboard() {
   const [feed, setFeed] = useState<EventFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState("");
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [brief, setBrief] = useState<BriefResponse | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"event" | "brief" | null>(
+    null,
+  );
+  const briefRequestRef = useRef<AbortController | null>(null);
 
   const route = routes.find((candidate) => candidate.id === routeId) ?? routes[0];
 
@@ -373,6 +406,13 @@ export function Dashboard() {
     return () => controller.abort();
   }, [routeId]);
 
+  useEffect(
+    () => () => {
+      briefRequestRef.current?.abort();
+    },
+    [],
+  );
+
   const activeEvents = useMemo(() => feed?.events ?? [], [feed]);
   const rankedEvents = useMemo(
     () =>
@@ -394,14 +434,89 @@ export function Dashboard() {
     rankedEvents[0];
 
   const handleRouteChange = (nextRouteId: Route["id"]) => {
+    briefRequestRef.current?.abort();
     setRouteId(nextRouteId);
     setLoading(true);
-    setMobileDetailOpen(false);
+    setBrief(null);
+    setBriefLoading(false);
+    setBriefOpen(false);
+    setMobilePanel(null);
   };
 
   const handleEventSelect = (eventId: string) => {
     setSelectedEventId(eventId);
-    setMobileDetailOpen(true);
+    setBriefOpen(false);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setMobilePanel("event");
+    }
+  };
+
+  const handleGenerateBrief = async () => {
+    if (!feed || rankedEvents.length === 0) {
+      return;
+    }
+
+    briefRequestRef.current?.abort();
+    const controller = new AbortController();
+    briefRequestRef.current = controller;
+    setBrief(null);
+    setBriefLoading(true);
+    setBriefOpen(true);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setMobilePanel("brief");
+    }
+
+    try {
+      const response = await fetch("/api/brief", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ routeId }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Brief API returned HTTP ${response.status}`);
+      }
+
+      const nextBrief = briefResponseSchema.parse(await response.json());
+      if (!controller.signal.aborted) {
+        setBrief(nextBrief);
+      }
+    } catch {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setBrief(
+        briefResponseSchema.parse({
+          ...buildRuleBasedBrief(route, rankedEvents),
+          mode: "fallback",
+          sourceMode: feed.mode,
+          sourceUpdatedAt: feed.updatedAt,
+          generatedAt: new Date().toISOString(),
+          fallbackReason:
+            "Brief API was unavailable; this summary was generated locally from the displayed reports.",
+          sanitization: {
+            citationsRemoved: 0,
+            evidenceRemoved: 0,
+          },
+        }),
+      );
+    } finally {
+      if (briefRequestRef.current === controller) {
+        briefRequestRef.current = null;
+        setBriefLoading(false);
+      }
+    }
+  };
+
+  const handleBriefClose = () => {
+    setBriefOpen(false);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setMobilePanel("event");
+    }
   };
 
   return (
@@ -428,6 +543,20 @@ export function Dashboard() {
               onRouteChange={handleRouteChange}
             />
             <p className="mt-3 text-xs text-zinc-600">{route.description}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 w-full"
+              disabled={
+                loading ||
+                !feed ||
+                rankedEvents.length === 0 ||
+                briefLoading
+              }
+              onClick={() => void handleGenerateBrief()}
+            >
+              {briefLoading ? "Generating brief…" : "Generate brief"}
+            </Button>
           </div>
           <div className="flex items-center justify-between px-4 pt-5 pb-2">
             <span className="text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
@@ -467,7 +596,16 @@ export function Dashboard() {
           )}
         </section>
         <aside className="order-3 hidden min-h-0 border-white/10 bg-[#0d0e10] p-6 lg:absolute lg:top-20 lg:right-4 lg:bottom-4 lg:z-20 lg:block lg:w-[320px] lg:overflow-y-auto lg:border xl:w-[360px]">
-          {!loading && selected ? (
+          {briefOpen && briefLoading ? (
+            <BriefSkeleton />
+          ) : briefOpen && brief ? (
+            <BriefPanel
+              brief={brief}
+              events={rankedMapEvents}
+              onSelectCitation={handleEventSelect}
+              onClose={handleBriefClose}
+            />
+          ) : !loading && selected ? (
             <EventDetail
               event={selected.event}
               assessment={selected.assessment}
@@ -482,17 +620,43 @@ export function Dashboard() {
         </aside>
       </section>
       {selected && (
-        <div className="lg:hidden">
-          <Sheet open={mobileDetailOpen} onOpenChange={setMobileDetailOpen}>
+        <div>
+          <Sheet
+            open={mobilePanel !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setMobilePanel(null);
+              }
+            }}
+          >
             <SheetContent>
-              <SheetTitle className="sr-only">{selected.event.title}</SheetTitle>
+              <SheetTitle className="sr-only">
+                {mobilePanel === "brief"
+                  ? "Route brief"
+                  : selected.event.title}
+              </SheetTitle>
               <SheetDescription className="sr-only">
-                Public report details and exposure status.
+                {mobilePanel === "brief"
+                  ? "Generated route brief with cited public reports."
+                  : "Public report details and exposure status."}
               </SheetDescription>
-              <EventDetail
-                event={selected.event}
-                assessment={selected.assessment}
-              />
+              {mobilePanel === "brief" ? (
+                briefLoading ? (
+                  <BriefSkeleton />
+                ) : brief ? (
+                  <BriefPanel
+                    brief={brief}
+                    events={rankedMapEvents}
+                    onSelectCitation={handleEventSelect}
+                    onClose={handleBriefClose}
+                  />
+                ) : null
+              ) : (
+                <EventDetail
+                  event={selected.event}
+                  assessment={selected.assessment}
+                />
+              )}
             </SheetContent>
           </Sheet>
         </div>
