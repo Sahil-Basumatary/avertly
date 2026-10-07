@@ -11,12 +11,12 @@ import type {
 
 import type { Event } from "@/lib/events";
 import type { Route } from "@/data/routes";
-import type { RouteAssessment } from "@/data/replay-events";
+import type { ExposureAssessment } from "@/lib/exposure";
 
 type RiskMapProps = {
   route: Route;
   events: Event[];
-  assessments: RouteAssessment[];
+  assessments: ExposureAssessment[];
   selectedEventId: string;
   onSelectEvent: (eventId: string) => void;
 };
@@ -68,9 +68,7 @@ function getStyle(): StyleSpecification {
         source: "esriImagery",
         paint: {
           "raster-opacity": 1,
-          "raster-saturation": -0.85,
-          "raster-brightness-min": 0.02,
-          "raster-brightness-max": 0.72,
+          "raster-saturation": 0,
         },
       },
       ...(apiKey
@@ -79,6 +77,7 @@ function getStyle(): StyleSpecification {
               id: "carto-labels",
               type: "raster" as const,
               source: "cartoLabels",
+              minzoom: 2.5,
               paint: { "raster-opacity": 1 },
             },
           ]
@@ -126,7 +125,7 @@ function routeData(route: Route, coordinateCount = route.coordinates.length) {
 
 function eventData(
   events: Event[],
-  assessments: RouteAssessment[],
+  assessments: ExposureAssessment[],
   selectedEventId: string,
 ) {
   const assessmentByEvent = new Map(
@@ -205,12 +204,12 @@ export default function RiskMap({
       map.setProjection({ type: "globe" });
       map.setSky({
         "sky-color": "#000000",
-        "horizon-color": "#d4d4d8",
-        "fog-color": "#8b8b91",
+        "horizon-color": "#7fa7bd",
+        "fog-color": "#52788f",
         "fog-ground-blend": 0.75,
-        "sky-horizon-blend": 0.18,
-        "horizon-fog-blend": 0.35,
-        "atmosphere-blend": 0.95,
+        "sky-horizon-blend": 0.28,
+        "horizon-fog-blend": 0.45,
+        "atmosphere-blend": 0.85,
       });
 
       map.addSource(routeSourceId, {

@@ -1,5 +1,7 @@
 import { eventSchema, type Event, type EventSource } from "@/lib/events";
 
+export const REPLAY_SNAPSHOT_AT = "2024-09-03T00:00:00.000Z";
+
 const replayEvents = [
   {
     id: "rubymar-gulf-of-aden",
@@ -15,6 +17,7 @@ const replayEvents = [
     locationName: "Gulf of Aden",
     locationNote:
       "Regional marker only. The public report identifies the Gulf of Aden but does not publish exact coordinates.",
+    locationPrecision: "regional",
     category: "security",
     mode: "replay",
   },
@@ -32,6 +35,7 @@ const replayEvents = [
     locationName: "Cape Town",
     locationNote:
       "Named-place marker at Cape Town. The report covers disruption across several South African ports.",
+    locationPrecision: "regional",
     category: "weather",
     mode: "replay",
   },
@@ -49,6 +53,7 @@ const replayEvents = [
     locationName: "29 nm north-east of Port St Johns",
     locationNote:
       "Approximate marker derived from the distance and direction stated in the public report.",
+    locationPrecision: "nearby",
     category: "weather",
     mode: "replay",
   },
@@ -66,6 +71,7 @@ const replayEvents = [
     locationName: "Port of Rotterdam",
     locationNote:
       "Named-place marker. The port notice does not identify the affected terminal.",
+    locationPrecision: "nearby",
     category: "operations",
     mode: "replay",
   },
@@ -80,31 +86,10 @@ class ReplayEventSource implements EventSource {
   }> {
     return {
       events: eventSchema.array().parse(replayEvents),
-      updatedAt: new Date().toISOString(),
+      updatedAt: REPLAY_SNAPSHOT_AT,
     };
   }
 }
 
 export const replayEventSource: EventSource = new ReplayEventSource();
 export const events = eventSchema.array().parse(replayEvents);
-
-export type RouteAssessment = {
-  eventId: Event["id"];
-  score: number | null;
-  band: "guarded" | "elevated" | "high" | null;
-};
-
-export const replayAssessments: Record<"suez" | "cape", RouteAssessment[]> = {
-  suez: [
-    { eventId: "rubymar-gulf-of-aden", score: 84, band: "high" },
-    { eventId: "rotterdam-it-disruption", score: 61, band: "elevated" },
-    { eventId: "cape-weather-shipping-stop", score: 43, band: "guarded" },
-    { eventId: "msc-antonia-container-loss", score: 36, band: "guarded" },
-  ],
-  cape: [
-    { eventId: "cape-weather-shipping-stop", score: 86, band: "high" },
-    { eventId: "msc-antonia-container-loss", score: 74, band: "elevated" },
-    { eventId: "rotterdam-it-disruption", score: 61, band: "elevated" },
-    { eventId: "rubymar-gulf-of-aden", score: 27, band: "guarded" },
-  ],
-};

@@ -152,6 +152,24 @@ function isShippingRelevant(event: GdeltEvent) {
   return shippingTerms.test(searchableText);
 }
 
+function normaliseLocationPrecision(
+  value: string | null | undefined,
+): Event["locationPrecision"] {
+  switch (value?.toLowerCase()) {
+    case "exact_place":
+    case "exact":
+      return "exact";
+    case "nearby_area":
+    case "nearby":
+      return "nearby";
+    case "country_or_region":
+    case "regional":
+      return "regional";
+    default:
+      return "unknown";
+  }
+}
+
 function normaliseEvent(input: unknown): Event | null {
   const parsed = gdeltEventSchema.safeParse(input);
   if (!parsed.success || !isShippingRelevant(parsed.data)) {
@@ -207,6 +225,9 @@ function normaliseEvent(input: unknown): Event | null {
     locationNote: event.geo.geo_precision_label
       ? `GDELT Cloud primary event location · ${event.geo.geo_precision_label}.`
       : "GDELT Cloud primary event location; precision was not provided.",
+    locationPrecision: normaliseLocationPrecision(
+      event.geo.geo_precision_label,
+    ),
     category,
     mode: "live",
   });

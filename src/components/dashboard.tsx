@@ -6,12 +6,16 @@ import { ExternalLink } from "lucide-react";
 
 import {
   events as replayEvents,
-  replayAssessments,
-  type RouteAssessment,
+  REPLAY_SNAPSHOT_AT,
 } from "@/data/replay-events";
 import { routes, type Route } from "@/data/routes";
 import { eventFeedSchema, type EventFeed } from "@/lib/event-feed";
 import type { Event } from "@/lib/events";
+import {
+  rankEventsByExposure,
+  type ExposureAssessment,
+  type RankedEvent,
+} from "@/lib/exposure";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -131,7 +135,7 @@ function EventList({
   selectedEventId,
   onSelect,
 }: {
-  rankedEvents: Array<{ event: Event; assessment: RouteAssessment }>;
+  rankedEvents: RankedEvent[];
   selectedEventId: string;
   onSelect: (eventId: string) => void;
 }) {
@@ -177,7 +181,7 @@ function EventList({
                     : "font-mono text-xl tabular-nums text-zinc-400"
                 }
               >
-                {assessment.score ?? "—"}
+                {assessment.score}
               </span>
             </button>
           </li>
@@ -213,34 +217,62 @@ function EventDetail({
   assessment,
 }: {
   event: Event;
-  assessment: RouteAssessment;
+  assessment: ExposureAssessment;
 }) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-white/8 pb-6">
         <div className="mb-5 flex items-center justify-between gap-4">
           <span className="text-[10px] tracking-[0.16em] text-zinc-500 uppercase">
-            {assessment.score === null
-              ? "Exposure scoring pending"
-              : "Curated replay exposure"}
+            Calculated route exposure
           </span>
           <span className="border border-white/10 px-2 py-1 text-[10px] tracking-[0.14em] text-zinc-400 uppercase">
-            {assessment.band ?? "unscored"}
+            {assessment.band}
           </span>
         </div>
         <div className="font-mono text-6xl leading-none tracking-[-0.06em] tabular-nums text-white">
-          {assessment.score ?? "—"}
-          {assessment.score !== null && (
-            <span className="ml-2 text-base tracking-normal text-zinc-600">
-              /100
-            </span>
-          )}
+          {assessment.score}
+          <span className="ml-2 text-base tracking-normal text-zinc-600">
+            /100
+          </span>
         </div>
         <p className="mt-3 text-xs leading-5 text-zinc-500">
-          {assessment.score === null
-            ? "This live report has not been scored yet. Formula-based exposure scoring is the next milestone."
-            : "Fixture value for this replay. It is not a prediction or a rerouting recommendation. Formula-based scoring is the next milestone."}
+          Transparent exposure score from route distance, category, report age
+          and stated location precision. It is not a prediction or rerouting
+          recommendation.
         </p>
+        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-white/8 pt-5 text-xs">
+          <div>
+            <dt className="text-zinc-600">Route distance</dt>
+            <dd className="mt-1 font-mono tabular-nums text-zinc-300">
+              {assessment.distanceKm.toFixed(1)} km
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-600">Distance points</dt>
+            <dd className="mt-1 font-mono tabular-nums text-zinc-300">
+              +{assessment.breakdown.distance}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-600">Category points</dt>
+            <dd className="mt-1 font-mono tabular-nums text-zinc-300">
+              +{assessment.breakdown.category}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-600">Recency points</dt>
+            <dd className="mt-1 font-mono tabular-nums text-zinc-300">
+              +{assessment.breakdown.recency}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-600">Location precision</dt>
+            <dd className="mt-1 font-mono tabular-nums text-zinc-300">
+              +{assessment.breakdown.locationPrecision}
+            </dd>
+          </div>
+        </dl>
       </div>
       <div className="space-y-6 py-6">
         <div>
@@ -317,7 +349,7 @@ export function Dashboard() {
         }
         const fallbackFeed = eventFeedSchema.parse({
           mode: "replay",
-          updatedAt: new Date().toISOString(),
+          updatedAt: REPLAY_SNAPSHOT_AT,
           provider: {
             name: "GDELT Cloud",
             status: "fallback",
@@ -342,25 +374,20 @@ export function Dashboard() {
   }, [routeId]);
 
   const activeEvents = useMemo(() => feed?.events ?? [], [feed]);
-  const assessments = useMemo<RouteAssessment[]>(() => {
-    if (feed?.mode === "replay") {
-      return replayAssessments[route.id];
-    }
-    return activeEvents.map((event) => ({
-      eventId: event.id,
-      score: null,
-      band: null,
-    }));
-  }, [activeEvents, feed?.mode, route.id]);
   const rankedEvents = useMemo(
     () =>
-      assessments.flatMap((assessment) => {
-        const event = activeEvents.find(
-          (candidate) => candidate.id === assessment.eventId,
-        );
-        return event ? [{ event, assessment }] : [];
-      }),
-    [activeEvents, assessments],
+      feed
+        ? rankEventsByExposure(activeEvents, route, feed.updatedAt)
+        : [],
+    [activeEvents, feed, route],
+  );
+  const assessments = useMemo(
+    () => rankedEvents.map(({ assessment }) => assessment),
+    [rankedEvents],
+  );
+  const rankedMapEvents = useMemo(
+    () => rankedEvents.map(({ event }) => event),
+    [rankedEvents],
   );
   const selected =
     rankedEvents.find(({ event }) => event.id === selectedEventId) ??
@@ -432,7 +459,7 @@ export function Dashboard() {
           ) : (
             <RiskMap
               route={route}
-              events={activeEvents}
+              events={rankedMapEvents}
               assessments={assessments}
               selectedEventId={selected.event.id}
               onSelectEvent={handleEventSelect}

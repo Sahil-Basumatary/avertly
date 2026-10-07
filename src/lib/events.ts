@@ -14,6 +14,7 @@ export const eventSchema = z.object({
   ]),
   locationName: z.string(),
   locationNote: z.string(),
+  locationPrecision: z.enum(["exact", "nearby", "regional", "unknown"]),
   category: z.enum(["security", "weather", "operations"]),
   mode: z.enum(["live", "replay"]),
 });
